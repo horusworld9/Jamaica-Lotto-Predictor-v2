@@ -38,14 +38,15 @@ for number in range(1, 39):
     forecast = m.predict(future)
     trend_forecasts[number] = forecast["yhat"].iloc[-4:].mean()
 
-top_trending = sorted(trend_forecasts, key=trend_forecasts.get, reverse=True)[:6]
-
-# UI
-st.title("🇯🇲 Jamaica Lotto Predictor v2")
-latest_input = X.tail(1)
-prediction = model.predict(latest_input)[0]
-bonus_prediction = bonus_model.predict(latest_input)[0]
-
-st.success(f"Predicted Main Numbers: {list(prediction)}")
-st.info(f"Predicted Bonus Ball: {bonus_prediction}")
-st.success(f"Top Trending Numbers: {top_trending}")
+top_trending = []
+for num in range(1, 39):
+    subset = ts_all[ts_all["number"] == num][["ds", "y"]]
+    
+    # Only run Prophet if at least 2 data points exist
+    if subset["y"].sum() >= 2:
+        m = Prophet(daily_seasonality=False, weekly_seasonality=True)
+        m.fit(subset)
+        future = m.make_future_dataframe(periods=4)
+        forecast = m.predict(future)
+        avg_forecast = forecast["yhat"].tail(4).mean()
+        top_trending.append((num, avg_forecast))
