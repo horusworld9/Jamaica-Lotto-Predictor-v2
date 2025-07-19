@@ -1,38 +1,42 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 
-# Load data
-df = pd.read_csv("lotto_data.csv")
-df["date"] = pd.to_datetime(df["date"])
-
-# Prepare features and labels
-X = df[["d1", "d2", "d3", "d4", "d5", "d6"]]
-y_main = df[["d1", "d2", "d3", "d4", "d5", "d6"]].shift(-1).dropna()
+# Load real Lotto history
+df = pd.read_csv("lotto_data.csv", parse_dates=["date"])
+X = df[["d1","d2","d3","d4","d5","d6"]]
+y_main = df[["d1","d2","d3","d4","d5","d6"]].shift(-1).dropna()
 y_bonus = df["bonus"].shift(-1).dropna().astype(int)
+X_main, X_bonus = X.iloc[:-1], X.iloc[:-1]
 
-# Align feature rows with target rows
-X_main = X.iloc[:-1]
-X_bonus = X.iloc[:-1]
-
-# Models
+# Train models
 main_model = RandomForestClassifier(n_estimators=100, random_state=42)
 main_model.fit(X_main, y_main)
-
 bonus_model = LogisticRegression(max_iter=300)
 bonus_model.fit(X_bonus, y_bonus)
 
-# Get prediction from latest draw
-latest_input = X.tail(1)
-main_prediction = main_model.predict(latest_input)[0]
-bonus_prediction = bonus_model.predict(latest_input)[0]
+# Predict probabilities for main numbers
+latest = X.tail(1)
+probs = main_model.predict_proba(latest)  # list of lists for each class
+# For multi-output, we gather probability distribution per number
+all_probs = np.mean(np.array([p[:,1] for p in probs]), axis=0)
+# Generate 5 separate prediction sets
+five_sets = []
+for _ in range(5):
+    pick = np.random.choice(range(1, 39), size=6, replace=False, p=all_probs/all_probs.sum())
+    five_sets.append(sorted(map(int, pick)))
 
-# UI
+bonus_pred = int(bonus_model.predict(latest)[0])
+
+# Display
 st.set_page_config(page_title="🇯🇲 Jamaica Lotto Predictor", layout="centered")
 st.title("🇯🇲 Jamaica Lotto Predictor")
-st.markdown("This app predicts the next 6 lotto numbers and bonus ball using machine learning.")
 
-st.subheader("📊 Latest Prediction")
-st.success(f"🎯 Predicted Numbers: {list(main_prediction)}")
-st.info(f"🎁 Predicted Bonus Ball: {bonus_prediction}")
+st.subheader("🎲 Five Suggested Ticket Sets")
+for i, s in enumerate(five_sets, 1):
+    st.write(f"Set {i}: {', '.join(map(str, s))}")
+
+st.subheader("🎁 Predicted Bonus Ball")
+st.write(str(bonus_pred))
