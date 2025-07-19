@@ -23,7 +23,8 @@ bonus_model = LogisticRegression(max_iter=200).fit(X[:-1], bonus_y)
 
 # Prophet trends
 stacked = df[["d1","d2","d3","d4","d5","d6"]].stack().reset_index(level=1, drop=True)
-counts = stacked.groupby(df.index).value_counts().unstack(fill_value=0)
+stacked = df[["d1", "d2", "d3", "d4", "d5", "d6"]].stack()
+number_counts = stacked.value_counts().sort_index()
 
 trend_forecasts = {}
 for number in range(1, 39):
