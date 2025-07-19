@@ -1,52 +1,38 @@
-
 import streamlit as st
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
-from prophet import Prophet
 
 # Load data
 df = pd.read_csv("lotto_data.csv")
 df["date"] = pd.to_datetime(df["date"])
 
-# Main number features
-X = df[["d1","d2","d3","d4","d5","d6"]]
-y = df[["d1","d2","d3","d4","d5","d6"]].shift(-1).dropna()
+# Prepare features and labels
+X = df[["d1", "d2", "d3", "d4", "d5", "d6"]]
+y_main = df[["d1", "d2", "d3", "d4", "d5", "d6"]].shift(-1).dropna()
+y_bonus = df["bonus"].shift(-1).dropna().astype(int)
 
-# Train model for next 6 numbers
-model = RandomForestClassifier(n_estimators=100)
-model.fit(X[:-1], y)
+# Align feature rows with target rows
+X_main = X.iloc[:-1]
+X_bonus = X.iloc[:-1]
 
-# Bonus ball model
-bonus_y = df["bonus"].shift(-1).dropna().astype(int)
-bonus_model = LogisticRegression(max_iter=200).fit(X[:-1], bonus_y)
+# Models
+main_model = RandomForestClassifier(n_estimators=100, random_state=42)
+main_model.fit(X_main, y_main)
 
-# Prophet trends
-stacked = df[["d1","d2","d3","d4","d5","d6"]].stack().reset_index(level=1, drop=True)
-stacked = df[["d1", "d2", "d3", "d4", "d5", "d6"]].stack()
-number_counts = stacked.value_counts().sort_index()
+bonus_model = LogisticRegression(max_iter=300)
+bonus_model.fit(X_bonus, y_bonus)
 
-trend_forecasts = {}
-for number in range(1, 39):
-    ts = pd.DataFrame({
-        "ds": df["date"],
-        "y": (stacked == number).groupby(df["date"]).sum()
-    })
-    m = Prophet(weekly_seasonality=True)
-    m.fit(ts)
-    future = m.make_future_dataframe(periods=4)
-    forecast = m.predict(future)
-    trend_forecasts[number] = forecast["yhat"].iloc[-4:].mean()
+# Get prediction from latest draw
+latest_input = X.tail(1)
+main_prediction = main_model.predict(latest_input)[0]
+bonus_prediction = bonus_model.predict(latest_input)[0]
 
-top_trending = []
-for num in range(1, 39):
-    subset = ts_all[ts_all["number"] == num][["ds", "y"]]
-    
-    # Only run Prophet if at least 2 data points exist
-    if subset["y"].sum() >= 2:
-        m = Prophet(daily_seasonality=False, weekly_seasonality=True)
-        m.fit(subset)
-        future = m.make_future_dataframe(periods=4)
-        forecast = m.predict(future)
-        avg_forecast = forecast["yhat"].tail(4).mean()
-        top_trending.append((num, avg_forecast))
+# UI
+st.set_page_config(page_title="🇯🇲 Jamaica Lotto Predictor", layout="centered")
+st.title("🇯🇲 Jamaica Lotto Predictor")
+st.markdown("This app predicts the next 6 lotto numbers and bonus ball using machine learning.")
+
+st.subheader("📊 Latest Prediction")
+st.success(f"🎯 Predicted Numbers: {list(main_prediction)}")
+st.info(f"🎁 Predicted Bonus Ball: {bonus_prediction}")
